@@ -16,11 +16,11 @@ public class GeneradorLlavesRSA {
         PrivateKey privatekey = par.getPrivate();
         PublicKey publicKey = par.getPublic();
 
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("keys/private.key"))){
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("Caso3/Caso3/keys/private.key"))){
             oos.writeObject(privatekey);
         }
 
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("keys/public.key"))){
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("Caso3/Caso3/keys/public.key"))){
             oos.writeObject(publicKey);
         }
         System.out.println("Llaves RSA generadas.");

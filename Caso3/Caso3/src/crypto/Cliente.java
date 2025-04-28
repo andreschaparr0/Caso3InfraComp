@@ -33,7 +33,7 @@ public class Cliente {
     }
 
     private void cargarLlavePublicaServidor() throws Exception {
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream("keys/public.key"))) {
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream("Caso3/Caso3/keys/public.key"))) {
             llavePublicaServidor = (PublicKey) ois.readObject();
         }
     }

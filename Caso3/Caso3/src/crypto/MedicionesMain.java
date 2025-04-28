@@ -3,6 +3,7 @@ package src.crypto;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Map;
+import java.util.Locale;
 
 public class MedicionesMain {
     private static Servidor servidorActual = null;
@@ -132,7 +133,8 @@ public class MedicionesMain {
             }
 
             for (Map.Entry<String, Double> entry : tiempos.entrySet()) {
-                String linea = String.format("%s,%d,%d,%s,%.4f\n",
+                // Usar String.format con Locale.US para asegurar punto decimal
+                String linea = String.format(Locale.US, "%s,%d,%d,%s,%.4f\n",
                     escenario, numClientes, clienteId, entry.getKey(), entry.getValue());
                 csvWriter.write(linea);
                 csvWriter.flush();

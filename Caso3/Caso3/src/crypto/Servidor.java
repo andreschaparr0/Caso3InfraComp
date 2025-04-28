@@ -34,10 +34,10 @@ public class Servidor {
     }
 
     private void cargarLlaves() throws Exception {
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream("keys/private.key"))) {
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream("Caso3/Caso3/keys/private.key"))) {
             llavePrivada = (PrivateKey) ois.readObject();
         }
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream("keys/public.key"))) {
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream("Caso3/Caso3/keys/public.key"))) {
             llavePublica = (PublicKey) ois.readObject();
         }
     }
