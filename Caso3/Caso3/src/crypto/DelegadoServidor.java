@@ -11,6 +11,7 @@ import java.util.Map;
 import javax.crypto.KeyAgreement;
 import java.util.Base64;
 import javax.crypto.spec.DHParameterSpec;
+import java.util.Locale;
 
 public class DelegadoServidor implements Runnable {
 
@@ -23,12 +24,24 @@ public class DelegadoServidor implements Runnable {
     private MedidorTiempo medidorCifrar = new MedidorTiempo();
     private MedidorTiempo medidorVerificar = new MedidorTiempo();
     private MedidorTiempo medidorCifrarAsimetrico = new MedidorTiempo();
-
+    private String escenario = "Secuencial";
+    private int numClientes = 1;
+    private int clienteId = 1;
 
     public DelegadoServidor(Socket cliente, PrivateKey llavePrivada, PublicKey llavePublica) {
         this.cliente = cliente;
         this.llavePrivada = llavePrivada;
         this.llavePublica = llavePublica;
+    }
+    
+    public DelegadoServidor(Socket cliente, PrivateKey llavePrivada, PublicKey llavePublica, 
+                          String escenario, int numClientes, int clienteId) {
+        this.cliente = cliente;
+        this.llavePrivada = llavePrivada;
+        this.llavePublica = llavePublica;
+        this.escenario = escenario;
+        this.numClientes = numClientes;
+        this.clienteId = clienteId;
     }
 
     @Override
@@ -91,6 +104,14 @@ public class DelegadoServidor implements Runnable {
         System.out.println("Tiempo de verificación: " + medidorVerificar.tiempoMilisegundos() + " ms");
     }
 
+    // Método estático para guardar la firma directamente en el CSV
+    public static void guardarFirmaEnCSV(double tiempoFirma, String escenario, int numClientes, int clienteId) {
+        String linea = String.format(Locale.US, "%s,%d,%d,%s,%.4f\n", 
+            escenario, numClientes, clienteId, "firma", tiempoFirma);
+        MedicionesMain.escribirLineaCSV(linea);
+        System.out.println("Tiempo de firma guardado en CSV: " + tiempoFirma + " ms para " + escenario + " con " + numClientes + " clientes, ID " + clienteId);
+    }
+
     private void enviarTablaServicios(SecretKey llaveCifrado, SecretKey llaveHMAC) throws Exception {
         Map<Integer, String> servicios = Servidor.obtenerServicios();
         StringBuilder sb = new StringBuilder();
@@ -99,12 +120,20 @@ public class DelegadoServidor implements Runnable {
         }
         byte[] datosTabla = sb.toString().getBytes();
 
+        // Medir tiempo de firma
         medidorFirmar.reset();
         medidorFirmar.comenzar();
         byte[] firma = Cifrado.firmarDatos(datosTabla, llavePrivada);
         medidorFirmar.parar();
-        System.out.println("Tiempo de firma: " + medidorFirmar.tiempoMilisegundos() + " ms");
+        
+        double tiempoFirma = medidorFirmar.tiempoMilisegundos();
+        System.out.println("Tiempo de firma: " + tiempoFirma + " ms");
+        
+        // Guardar medición de firma en CSV (evitamos duplicación usando solo un método)
+        guardarMedicionEnCSV("firma", tiempoFirma);
+        // Ya no llamamos a guardarFirmaEnCSV para evitar duplicación
 
+        // Medir tiempo de cifrado
         medidorCifrar.reset();
         medidorCifrar.comenzar();
         IvParameterSpec iv = Cifrado.generarIV();
@@ -133,7 +162,10 @@ public class DelegadoServidor implements Runnable {
         byte[] hmacCalculado = Cifrado.HMAC(solicitudCifrada, llaveHMAC);
         boolean hmacValido = MessageDigest.isEqual(hmacRecibido, hmacCalculado);
         medidorVerificar.parar();
-        System.out.println("Tiempo de verificación: " + medidorVerificar.tiempoMilisegundos() + " ms");
+        
+        double tiempoVerificacion = medidorVerificar.tiempoMilisegundos();
+        System.out.println("Tiempo de verificación: " + tiempoVerificacion + " ms");
+        guardarMedicionEnCSV("verificacion_servidor", tiempoVerificacion);
 
         if (!hmacValido) {
             System.out.println("Error en la consulta (HMAC inválido). Terminando conexión.");
@@ -160,14 +192,20 @@ public class DelegadoServidor implements Runnable {
         IvParameterSpec ivRespuesta = Cifrado.generarIV();
         byte[] direccionCifrada = Cifrado.cifrarAES(direccionBytes, llaveCifrado, ivRespuesta);
         medidorCifrar.parar();
-        System.out.println("Tiempo de cifrado simétrico: " + medidorCifrar.tiempoMilisegundos() + " ms");
+        
+        double tiempoCifrado = medidorCifrar.tiempoMilisegundos();
+        System.out.println("Tiempo de cifrado simétrico: " + tiempoCifrado + " ms");
+        guardarMedicionEnCSV("cifrado_simetrico_servidor", tiempoCifrado);
 
         // Medir cifrado asimétrico
         medidorCifrarAsimetrico.reset();
         medidorCifrarAsimetrico.comenzar();
         byte[] direccionCifradaAsimetrica = Cifrado.cifrarRSA(direccionBytes, llavePublica);
         medidorCifrarAsimetrico.parar();
-        System.out.println("Tiempo de cifrado asimétrico: " + medidorCifrarAsimetrico.tiempoMilisegundos() + " ms");
+        
+        double tiempoCifradoAsimetrico = medidorCifrarAsimetrico.tiempoMilisegundos();
+        System.out.println("Tiempo de cifrado asimétrico: " + tiempoCifradoAsimetrico + " ms");
+        guardarMedicionEnCSV("cifrado_asimetrico_servidor", tiempoCifradoAsimetrico);
 
         byte[] hmacDireccion = Cifrado.HMAC(direccionCifrada, llaveHMAC);
 
@@ -175,15 +213,13 @@ public class DelegadoServidor implements Runnable {
         salida.writeObject(direccionCifrada);
         salida.writeObject(hmacDireccion);
         salida.flush();
-
-        // Guardar mediciones en CSV
-        try (FileWriter fw = new FileWriter("mediciones.csv", true);
-             BufferedWriter bw = new BufferedWriter(fw);
-             PrintWriter out = new PrintWriter(bw)) {
-            out.println("Secuencial,1,1,cifrado_simetrico," + medidorCifrar.tiempoMilisegundos());
-            out.println("Secuencial,1,1,cifrado_asimetrico," + medidorCifrarAsimetrico.tiempoMilisegundos());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    }
+    
+    private void guardarMedicionEnCSV(String operacion, double tiempo) {
+        String linea = String.format(Locale.US, "%s,%d,%d,%s,%.4f\n", 
+            escenario, numClientes, clienteId, operacion, tiempo);
+        MedicionesMain.escribirLineaCSV(linea);
     }
 }
+
+

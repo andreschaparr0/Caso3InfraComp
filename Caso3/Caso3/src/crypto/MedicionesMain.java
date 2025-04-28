@@ -4,16 +4,24 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Locale;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class MedicionesMain {
     private static Servidor servidorActual = null;
     private static FileWriter csvWriter;
+    
+    // Crear un lock estático para sincronizar acceso al CSV
+    private static final ReentrantLock csvLock = new ReentrantLock();
 
     public static void main(String[] args) throws Exception {
         // Crear archivo CSV
         try {
             csvWriter = new FileWriter("mediciones.csv");
             csvWriter.write("Escenario,NumClientes,Cliente,Operacion,Tiempo(ms)\n");
+            
+            // Ya no añadimos una entrada inicial de firma
+            // csvWriter.write("Secuencial,1,1,firma,0.0000\n");
+            
             csvWriter.flush();
             System.out.println("Archivo CSV creado correctamente");
         } catch (IOException e) {
@@ -31,7 +39,8 @@ public class MedicionesMain {
         // Iniciar servidor
         Thread servidorThread = new Thread(() -> {
             try {
-                servidorActual = new Servidor();
+                System.out.println("Iniciando servidor para escenario Secuencial con 1 cliente");
+                servidorActual = new Servidor("Secuencial", 1);
                 servidorActual.iniciar();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -72,7 +81,8 @@ public class MedicionesMain {
             // Iniciar nuevo servidor
             servidorThread = new Thread(() -> {
                 try {
-                    servidorActual = new Servidor();
+                    System.out.println("Iniciando servidor para escenario Concurrente con " + num + " clientes");
+                    servidorActual = new Servidor("Concurrente", num);
                     servidorActual.iniciar();
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -127,21 +137,40 @@ public class MedicionesMain {
     }
 
     private static void guardarTiemposEnCSV(String escenario, int numClientes, int clienteId, Map<String, Double> tiempos) {
-        try {
-            if (tiempos == null || tiempos.isEmpty()) {
-                return;
-            }
+        if (tiempos == null || tiempos.isEmpty()) {
+            return;
+        }
 
+        // Adquirir el lock para escritura sincronizada
+        csvLock.lock();
+        try {
             for (Map.Entry<String, Double> entry : tiempos.entrySet()) {
                 // Usar String.format con Locale.US para asegurar punto decimal
                 String linea = String.format(Locale.US, "%s,%d,%d,%s,%.4f\n",
                     escenario, numClientes, clienteId, entry.getKey(), entry.getValue());
                 csvWriter.write(linea);
-                csvWriter.flush();
             }
+            csvWriter.flush();
         } catch (IOException e) {
             System.err.println("Error al escribir en el archivo CSV:");
             e.printStackTrace();
+        } finally {
+            // Siempre liberar el lock
+            csvLock.unlock();
+        }
+    }
+    
+    // Método estático para permitir escritura sincronizada desde otras clases
+    public static void escribirLineaCSV(String linea) {
+        csvLock.lock();
+        try {
+            csvWriter.write(linea);
+            csvWriter.flush();
+        } catch (IOException e) {
+            System.err.println("Error al escribir en el archivo CSV:");
+            e.printStackTrace();
+        } finally {
+            csvLock.unlock();
         }
     }
 } 

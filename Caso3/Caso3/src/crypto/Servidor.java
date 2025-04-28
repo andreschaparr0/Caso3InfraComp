@@ -24,11 +24,20 @@ public class Servidor {
     private static Map<Integer, String> direcciones; // ID -> "IP:PUERTO"
     private ServerSocket servidorSocket;
     private boolean ejecutando = true;
+    private String escenario = "Secuencial";
+    private int numClientes = 1;
 
     private PrivateKey llavePrivada;
     private PublicKey llavePublica;
 
     public Servidor() throws Exception {
+        cargarLlaves();
+        inicializarServicios();
+    }
+    
+    public Servidor(String escenario, int numClientes) throws Exception {
+        this.escenario = escenario;
+        this.numClientes = numClientes;
         cargarLlaves();
         inicializarServicios();
     }
@@ -62,13 +71,19 @@ public class Servidor {
         while (ejecutando) {
             try {
                 Socket cliente = servidorSocket.accept();
-                new Thread(new DelegadoServidor(cliente, llavePrivada, llavePublica)).start();
+                new Thread(new DelegadoServidor(cliente, llavePrivada, llavePublica, escenario, numClientes, getNextClientId())).start();
             } catch (IOException e) {
                 if (ejecutando) {
                     throw e;
                 }
             }
         }
+    }
+    
+    private int clientCounter = 0;
+    
+    private synchronized int getNextClientId() {
+        return ++clientCounter;
     }
 
     public void cerrar() {
