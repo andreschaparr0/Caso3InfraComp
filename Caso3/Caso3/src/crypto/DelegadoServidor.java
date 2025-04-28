@@ -16,16 +16,19 @@ public class DelegadoServidor implements Runnable {
 
     private Socket cliente;
     private PrivateKey llavePrivada;
+    private PublicKey llavePublica;
     private ObjectInputStream entrada;
     private ObjectOutputStream salida;
     private MedidorTiempo medidorFirmar = new MedidorTiempo();
     private MedidorTiempo medidorCifrar = new MedidorTiempo();
     private MedidorTiempo medidorVerificar = new MedidorTiempo();
+    private MedidorTiempo medidorCifrarAsimetrico = new MedidorTiempo();
 
 
-    public DelegadoServidor(Socket cliente, PrivateKey llavePrivada) {
+    public DelegadoServidor(Socket cliente, PrivateKey llavePrivada, PublicKey llavePublica) {
         this.cliente = cliente;
         this.llavePrivada = llavePrivada;
+        this.llavePublica = llavePublica;
     }
 
     @Override
@@ -119,11 +122,12 @@ public class DelegadoServidor implements Runnable {
     }
 
     private void recibirYResponderSolicitud(SecretKey llaveCifrado, SecretKey llaveHMAC) throws Exception {
-    
+        // Recibir solicitud cifrada
         byte[] ivBytes = (byte[]) entrada.readObject();
         byte[] solicitudCifrada = (byte[]) entrada.readObject();
         byte[] hmacRecibido = (byte[]) entrada.readObject();
 
+        // Verificar HMAC
         medidorVerificar.reset();
         medidorVerificar.comenzar();
         byte[] hmacCalculado = Cifrado.HMAC(solicitudCifrada, llaveHMAC);
@@ -136,7 +140,6 @@ public class DelegadoServidor implements Runnable {
             cliente.close();
             return;
         }
-
 
         // Descifrar solicitud
         IvParameterSpec iv = new IvParameterSpec(ivBytes);
@@ -151,13 +154,36 @@ public class DelegadoServidor implements Runnable {
         // Enviar dirección cifrada con HMAC
         byte[] direccionBytes = direccion.getBytes();
 
+        // Medir cifrado simétrico
+        medidorCifrar.reset();
+        medidorCifrar.comenzar();
         IvParameterSpec ivRespuesta = Cifrado.generarIV();
         byte[] direccionCifrada = Cifrado.cifrarAES(direccionBytes, llaveCifrado, ivRespuesta);
+        medidorCifrar.parar();
+        System.out.println("Tiempo de cifrado simétrico: " + medidorCifrar.tiempoMilisegundos() + " ms");
+
+        // Medir cifrado asimétrico
+        medidorCifrarAsimetrico.reset();
+        medidorCifrarAsimetrico.comenzar();
+        byte[] direccionCifradaAsimetrica = Cifrado.cifrarRSA(direccionBytes, llavePublica);
+        medidorCifrarAsimetrico.parar();
+        System.out.println("Tiempo de cifrado asimétrico: " + medidorCifrarAsimetrico.tiempoMilisegundos() + " ms");
+
         byte[] hmacDireccion = Cifrado.HMAC(direccionCifrada, llaveHMAC);
 
         salida.writeObject(ivRespuesta.getIV());
         salida.writeObject(direccionCifrada);
         salida.writeObject(hmacDireccion);
         salida.flush();
+
+        // Guardar mediciones en CSV
+        try (FileWriter fw = new FileWriter("mediciones.csv", true);
+             BufferedWriter bw = new BufferedWriter(fw);
+             PrintWriter out = new PrintWriter(bw)) {
+            out.println("Secuencial,1,1,cifrado_simetrico," + medidorCifrar.tiempoMilisegundos());
+            out.println("Secuencial,1,1,cifrado_asimetrico," + medidorCifrarAsimetrico.tiempoMilisegundos());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

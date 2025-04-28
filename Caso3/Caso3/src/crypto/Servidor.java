@@ -62,7 +62,7 @@ public class Servidor {
         while (ejecutando) {
             try {
                 Socket cliente = servidorSocket.accept();
-                new Thread(new DelegadoServidor(cliente, llavePrivada)).start();
+                new Thread(new DelegadoServidor(cliente, llavePrivada, llavePublica)).start();
             } catch (IOException e) {
                 if (ejecutando) {
                     throw e;

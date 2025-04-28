@@ -43,6 +43,15 @@ public class ClienteMedicion {
         String operacionKey = operacion.toLowerCase().replace(" ", "_");
         tiempos.put(operacionKey, tiempo);
         System.out.println(String.format("%s: %.4f ms", operacion, tiempo));
+        
+        // Escribir en CSV
+        try (FileWriter fw = new FileWriter("mediciones.csv", true);
+             BufferedWriter bw = new BufferedWriter(fw);
+             PrintWriter out = new PrintWriter(bw)) {
+            out.println("Secuencial,1," + id + "," + operacionKey + "," + tiempo);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public Map<String, Double> getTiempos() {
@@ -137,19 +146,25 @@ public class ClienteMedicion {
         long inicioIV = System.nanoTime();
         IvParameterSpec iv = Cifrado.generarIV();
         double tiempoIV = (System.nanoTime() - inicioIV) / 1_000_000.0;
-        imprimirTiempo("Generacion IV", tiempoIV);
+        imprimirTiempo("generacion_iv", tiempoIV);
 
-        // Cifrar solicitud
+        // Cifrar solicitud (simétrico)
         long inicioCifrado = System.nanoTime();
         byte[] solicitudCifrada = Cifrado.cifrarAES(datos, llaveCifrado, iv);
         double tiempoCifrado = (System.nanoTime() - inicioCifrado) / 1_000_000.0;
-        imprimirTiempo("Cifrado", tiempoCifrado);
+        imprimirTiempo("cifrado_simetrico", tiempoCifrado);
+
+        // Cifrar solicitud (asimétrico - solo para medición)
+        long inicioCifradoAsimetrico = System.nanoTime();
+        byte[] solicitudCifradaAsimetrica = Cifrado.cifrarRSA(datos, llavePublicaServidor);
+        double tiempoCifradoAsimetrico = (System.nanoTime() - inicioCifradoAsimetrico) / 1_000_000.0;
+        imprimirTiempo("cifrado_asimetrico", tiempoCifradoAsimetrico);
 
         // HMAC
         long inicioHMAC = System.nanoTime();
         byte[] hmacSolicitud = Cifrado.HMAC(solicitudCifrada, llaveHMAC);
         double tiempoHMAC = (System.nanoTime() - inicioHMAC) / 1_000_000.0;
-        imprimirTiempo("HMAC Solicitud", tiempoHMAC);
+        imprimirTiempo("hmac_solicitud", tiempoHMAC);
 
         salida.writeObject(iv.getIV());
         salida.writeObject(solicitudCifrada);
